@@ -1,0 +1,279 @@
+# callsheet-api
+
+A Go REST API that powers a **Callsheet** game — a *Six Degrees of Kevin Bacon*‑style challenge where players chain actors together through shared movie credits. The server is backed by [The Movie Database (TMDB)](https://www.themoviedb.org/) and caches credit lookups in memory to keep round‑trips fast.
+
+---
+
+## Table of Contents
+
+- [How the Game Works](#how-the-game-works)
+- [Requirements](#requirements)
+- [Getting Started](#getting-started)
+- [Environment Variables](#environment-variables)
+- [Running the Server](#running-the-server)
+- [API Reference](#api-reference)
+  - [Search People](#get-searchpeople)
+  - [Get Person](#get-peopleid)
+  - [Validate Step](#post-gamevalidate-step)
+- [Error Responses](#error-responses)
+- [Running Tests](#running-tests)
+- [Project Structure](#project-structure)
+
+---
+
+## How the Game Works
+
+Players are given **two seed actors** — a starting actor and a target actor — and must build the shortest possible chain connecting them. Each link in the chain must be two actors who appeared in a movie together. Rules:
+
+1. Any actor can only appear **once** in a chain — no revisiting.
+2. A step is **valid** only if the current actor and the proposed next actor share at least one movie credit.
+3. The API returns the connecting movies so the client can display proof of each link.
+4. The goal is to reach the target actor in as **few moves as possible**.
+
+---
+
+## Requirements
+
+- **Go 1.26+** (uses the enhanced `net/http` ServeMux with path‑value extraction)
+- A free [TMDB API key](https://developer.themoviedb.org/docs/getting-started)
+
+---
+
+## Getting Started
+
+```bash
+git clone https://github.com/Br0bertinus/callsheet-api.git
+cd callsheet-api
+go mod download
+```
+
+Copy the example environment file and add your key:
+
+```bash
+cp .env.example .env
+# edit .env and set TMDB_API_KEY=<your key>
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `TMDB_API_KEY` | Yes | API key obtained from TMDB developer portal |
+
+---
+
+## Running the Server
+
+```bash
+export TMDB_API_KEY=your_key_here
+go run ./cmd/server
+```
+
+The server starts on **`:8080`** by default.
+
+---
+
+## API Reference
+
+All responses use `Content-Type: application/json`.
+
+---
+
+### `GET /search/people`
+
+Search TMDB for actors or crew members by name.
+
+**Query Parameters**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `q` | string | Yes | Name or partial name to search for |
+
+**Example Request**
+
+```bash
+curl "http://localhost:8080/search/people?q=Tom+Hanks"
+```
+
+**Example Response** `200 OK`
+
+```json
+[
+  {
+    "id": 31,
+    "name": "Tom Hanks",
+    "profilePath": "/xndWFsBlClOJFRdhSt4NBwiPq2o.jpg"
+  },
+  {
+    "id": 2227929,
+    "name": "Tom Hanks Jr.",
+    "profilePath": ""
+  }
+]
+```
+
+---
+
+### `GET /people/{id}`
+
+Fetch a single person by their TMDB person ID.
+
+**Path Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | integer | TMDB person ID (must be a positive integer) |
+
+**Example Request**
+
+```bash
+curl "http://localhost:8080/people/31"
+```
+
+**Example Response** `200 OK`
+
+```json
+{
+  "id": 31,
+  "name": "Tom Hanks",
+  "profilePath": "/xndWFsBlClOJFRdhSt4NBwiPq2o.jpg"
+}
+```
+
+---
+
+### `POST /game/validate-step`
+
+Validate a proposed move in the game. Checks that:
+
+- `nextActorId` has not already been visited in this chain.
+- `currentActorId` and `nextActorId` share at least one movie credit.
+
+When the step is valid the response includes all connecting movies as proof.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `currentActorId` | integer | Yes | TMDB ID of the actor the player is moving **from** |
+| `nextActorId` | integer | Yes | TMDB ID of the actor the player wants to move **to** |
+| `visitedActorIds` | integer[] | No | All actor IDs already used in the current chain (prevents revisiting) |
+
+**Example Request — Valid Step**
+
+```bash
+curl -X POST "http://localhost:8080/game/validate-step" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "currentActorId": 31,
+    "nextActorId": 287,
+    "visitedActorIds": [31]
+  }'
+```
+
+**Example Response** `200 OK` — step is valid
+
+```json
+{
+  "valid": true,
+  "connectingMovies": [
+    {
+      "id": 13,
+      "title": "Forrest Gump",
+      "year": 1994
+    },
+    {
+      "id": 857,
+      "title": "Saving Private Ryan",
+      "year": 1998
+    }
+  ]
+}
+```
+
+**Example Request — Invalid Step (already visited)**
+
+```bash
+curl -X POST "http://localhost:8080/game/validate-step" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "currentActorId": 31,
+    "nextActorId": 287,
+    "visitedActorIds": [31, 287]
+  }'
+```
+
+**Example Response** `200 OK` — step is invalid (actor already in chain)
+
+```json
+{
+  "valid": false,
+  "connectingMovies": []
+}
+```
+
+**Example Response** `200 OK` — step is invalid (no shared movies)
+
+```json
+{
+  "valid": false,
+  "connectingMovies": []
+}
+```
+
+---
+
+## Error Responses
+
+All errors return a JSON body with a single `error` field.
+
+```json
+{
+  "error": "description of the problem"
+}
+```
+
+| Status | Meaning |
+|---|---|
+| `400 Bad Request` | Missing or malformed request parameters / body |
+| `502 Bad Gateway` | TMDB upstream request failed |
+
+---
+
+## Running Tests
+
+```bash
+go test ./...
+```
+
+The service layer uses an in‑memory fake TMDB client so tests run without a network connection or API key.
+
+---
+
+## Project Structure
+
+```
+callsheet-api/
+├── cmd/
+│   └── server/
+│       └── main.go          # Entry point — wires dependencies and registers routes
+├── internal/
+│   ├── cache/
+│   │   ├── cache.go         # Cache interface
+│   │   └── memory.go        # In-memory cache with TTL (default 30 min)
+│   ├── client/
+│   │   ├── tmdb.go          # TMDBClient interface
+│   │   └── tmdb_http.go     # HTTP implementation backed by TMDB API v3
+│   ├── domain/
+│   │   └── models.go        # Shared domain types (Actor, Movie, request/response structs)
+│   ├── handlers/
+│   │   ├── game.go          # POST /game/validate-step
+│   │   ├── people.go        # GET /search/people, GET /people/{id}
+│   │   └── respond.go       # JSON/error response helpers
+│   └── service/
+│       ├── game.go          # Business logic: search, lookup, step validation
+│       └── game_test.go     # Unit tests for game service
+└── go.mod
+```
