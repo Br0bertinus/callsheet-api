@@ -1,0 +1,16 @@
+# Git
+.git
+.gitignore
+
+# Editor
+.vscode
+
+# Env files (never bake secrets into the image)
+.env
+.env.*
+
+# Test artifacts
+**/*_test.go
+
+# README
+README.md

@@ -11,6 +11,7 @@ A Go REST API that powers a **Callsheet** game — a *Six Degrees of Kevin Bacon
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
 - [Running the Server](#running-the-server)
+- [Running with Docker](#running-with-docker)
 - [API Reference](#api-reference)
   - [Search People](#get-searchpeople)
   - [Get Person](#get-peopleid)
@@ -72,6 +73,61 @@ go run ./cmd/server
 ```
 
 The server starts on **`:8080`** by default.
+
+---
+
+## Running with Docker
+
+### Prerequisites
+
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) (free for personal use) must be installed and running.
+
+### Build the image
+
+```bash
+docker build -t callsheet-api .
+```
+
+### Run the container
+
+```bash
+docker run -p 8080:8080 -e TMDB_API_KEY=your_key_here callsheet-api
+```
+
+Or use a `.env` file to avoid passing the key inline:
+
+```bash
+docker run -p 8080:8080 --env-file .env callsheet-api
+```
+
+The API is available at `http://localhost:8080` once the container starts. Stop it with `Ctrl+C`.
+
+### Useful commands
+
+```bash
+# List running containers
+docker ps
+
+# Tail logs from a running container
+docker logs -f <container-id>
+
+# Stop a container
+docker stop <container-id>
+
+# Remove the image
+docker rmi callsheet-api
+```
+
+### Request logs
+
+Every request is logged to stdout with the method, path, response status, and elapsed time:
+
+```
+2026/02/24 12:34:56 GET /search/people -> 200 (3.412ms)
+2026/02/24 12:34:57 POST /game/validate-step -> 400 (81µs)
+```
+
+These are visible in the terminal or in the **Containers** tab of Docker Desktop.
 
 ---
 
@@ -270,10 +326,13 @@ callsheet-api/
 │   │   └── models.go        # Shared domain types (Actor, Movie, request/response structs)
 │   ├── handlers/
 │   │   ├── game.go          # POST /game/validate-step
+│   │   ├── middleware.go    # Logging middleware (method, path, status, latency)
 │   │   ├── people.go        # GET /search/people, GET /people/{id}
 │   │   └── respond.go       # JSON/error response helpers
 │   └── service/
 │       ├── game.go          # Business logic: search, lookup, step validation
 │       └── game_test.go     # Unit tests for game service
+├── Dockerfile               # Multi-stage build → minimal alpine runtime image
+├── .dockerignore            # Excludes .git, .env files, and tests from build context
 └── go.mod
 ```

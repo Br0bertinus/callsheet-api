@@ -36,7 +36,7 @@ func main() {
 	addr := ":8080"
 	log.Printf("callsheet-api listening on %s", addr)
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handlers.LoggingMiddleware(mux)); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }
