@@ -69,10 +69,14 @@ cp .env.example .env
 
 ```bash
 export TMDB_API_KEY=your_key_here
-go run ./cmd/server
+go run . serve
 ```
 
-The server starts on **`:8080`** by default.
+The server starts on **`:8080`** by default. To use a different address:
+
+```bash
+go run . serve --addr :9090
+```
 
 ---
 
@@ -120,11 +124,11 @@ docker rmi callsheet-api
 
 ### Request logs
 
-Every request is logged to stdout with the method, path, response status, and elapsed time:
+Every request is logged to stdout as structured JSON (via [zap](https://github.com/uber-go/zap)) with the method, path, response status, and elapsed time:
 
-```
-2026/02/24 12:34:56 GET /search/people -> 200 (3.412ms)
-2026/02/24 12:34:57 POST /game/validate-step -> 400 (81µs)
+```json
+{"level":"info","ts":1740398096.123,"msg":"request","method":"GET","path":"/search/people","status":200,"duration":"3.412ms"}
+{"level":"info","ts":1740398097.456,"msg":"request","method":"POST","path":"/game/validate-step","status":400,"duration":"81µs"}
 ```
 
 These are visible in the terminal or in the **Containers** tab of Docker Desktop.
@@ -134,6 +138,26 @@ These are visible in the terminal or in the **Containers** tab of Docker Desktop
 ## API Reference
 
 All responses use `Content-Type: application/json`.
+
+---
+
+### `GET /health`
+
+Returns the current health status of the server. Useful for container health checks and load balancer probes.
+
+**Example Request**
+
+```bash
+curl "http://localhost:8080/health"
+```
+
+**Example Response** `200 OK`
+
+```json
+{
+  "status": "ok"
+}
+```
 
 ---
 
@@ -312,9 +336,17 @@ The service layer uses an in‑memory fake TMDB client so tests run without a ne
 
 ```
 callsheet-api/
+├── main.go                  # Entry point — calls cmd.Execute()
 ├── cmd/
-│   └── server/
-│       └── main.go          # Entry point — wires dependencies and registers routes
+│   ├── root.go              # Root Cobra command and Execute()
+│   └── serve.go             # `serve` subcommand — initializes dependencies and starts server
+├── server/
+│   ├── server.go            # Server struct, routes, graceful shutdown
+│   ├── health.go            # GET /health
+│   ├── people.go            # GET /search/people, GET /people/{id}
+│   ├── game.go              # POST /game/validate-step
+│   ├── middleware.go        # Logging middleware (method, path, status, latency)
+│   └── respond.go           # JSON/error response helpers
 ├── internal/
 │   ├── cache/
 │   │   ├── cache.go         # Cache interface
@@ -324,11 +356,6 @@ callsheet-api/
 │   │   └── tmdb_http.go     # HTTP implementation backed by TMDB API v3
 │   ├── domain/
 │   │   └── models.go        # Shared domain types (Actor, Movie, request/response structs)
-│   ├── handlers/
-│   │   ├── game.go          # POST /game/validate-step
-│   │   ├── middleware.go    # Logging middleware (method, path, status, latency)
-│   │   ├── people.go        # GET /search/people, GET /people/{id}
-│   │   └── respond.go       # JSON/error response helpers
 │   └── service/
 │       ├── game.go          # Business logic: search, lookup, step validation
 │       └── game_test.go     # Unit tests for game service
