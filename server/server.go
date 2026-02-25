@@ -48,6 +48,7 @@ func (s *Server) Start(addr string) error {
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sig)
 
 	go func() {
 		s.Logger.Info("callsheet-api listening", zap.String("addr", addr))
