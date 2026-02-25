@@ -16,13 +16,15 @@ type Movie struct {
 
 // ValidateStepRequest is the body for POST /game/validate-step.
 type ValidateStepRequest struct {
-	CurrentActorID int   `json:"currentActorId"`
-	NextActorID    int   `json:"nextActorId"`
+	CurrentActorID  int   `json:"currentActorId"`
+	NextActorID     int   `json:"nextActorId"`
+	MovieID         int   `json:"movieId"` // the movie the user claims connects the two actors
 	VisitedActorIDs []int `json:"visitedActorIds"`
+	VisitedMovieIDs []int `json:"visitedMovieIds"` // movies already used in the chain
 }
 
 // ValidateStepResponse is the response for POST /game/validate-step.
 type ValidateStepResponse struct {
 	Valid            bool    `json:"valid"`
-	ConnectingMovies []Movie `json:"connectingMovies"`
+	ConnectingMovies []Movie `json:"connectingMovies"` // all valid shared movies (for client hints)
 }

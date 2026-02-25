@@ -13,4 +13,7 @@ type TMDBClient interface {
 
 	// GetMovieCredits returns all movies the actor has appeared in.
 	GetMovieCredits(actorID int) ([]domain.Movie, error)
+
+	// SearchMovies returns movies matching the query string.
+	SearchMovies(query string) ([]domain.Movie, error)
 }
