@@ -20,6 +20,11 @@ func (s *Server) ValidateStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.MovieID <= 0 {
+		s.writeError(w, http.StatusBadRequest, "movieId must be a positive integer")
+		return
+	}
+
 	result, err := s.GameService.ValidateStep(req)
 	if err != nil {
 		s.writeError(w, http.StatusBadGateway, "failed to validate step")

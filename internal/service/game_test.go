@@ -30,6 +30,10 @@ func (m *mockTMDB) GetMovieCredits(actorID int) ([]domain.Movie, error) {
 	return m.credits[actorID], nil
 }
 
+func (m *mockTMDB) SearchMovies(_ string) ([]domain.Movie, error) {
+	return nil, nil
+}
+
 // --- helpers ---
 
 func newService(credits map[int][]domain.Movie) *service.GameService {
@@ -63,6 +67,7 @@ func TestValidateStep_InvalidWhenNoSharedMovies(t *testing.T) {
 	result, err := svc.ValidateStep(domain.ValidateStepRequest{
 		CurrentActorID:  1,
 		NextActorID:     2,
+		MovieID:         10,
 		VisitedActorIDs: []int{},
 	})
 
@@ -82,6 +87,7 @@ func TestValidateStep_ValidWhenSharedMoviesExist(t *testing.T) {
 	result, err := svc.ValidateStep(domain.ValidateStepRequest{
 		CurrentActorID:  1,
 		NextActorID:     2,
+		MovieID:         99, // correctly names the shared movie
 		VisitedActorIDs: []int{},
 	})
 
@@ -104,11 +110,13 @@ func TestValidateStep_ValidWhenMultipleSharedMovies(t *testing.T) {
 	result, err := svc.ValidateStep(domain.ValidateStepRequest{
 		CurrentActorID:  10,
 		NextActorID:     20,
+		MovieID:         1, // names one of the two shared movies
 		VisitedActorIDs: []int{},
 	})
 
 	require.NoError(t, err)
 	assert.True(t, result.Valid)
+	// Both shared movies are returned so the client can surface them as hints.
 	assert.Len(t, result.ConnectingMovies, 2)
 }
 
@@ -121,12 +129,58 @@ func TestValidateStep_NextActorNotInVisitedButNoSharedMovies(t *testing.T) {
 	result, err := svc.ValidateStep(domain.ValidateStepRequest{
 		CurrentActorID:  1,
 		NextActorID:     2,
+		MovieID:         99,
 		VisitedActorIDs: []int{3, 4},
 	})
 
 	require.NoError(t, err)
 	assert.False(t, result.Valid)
 	assert.Empty(t, result.ConnectingMovies)
+}
+
+func TestValidateStep_InvalidWhenNamedMovieNotShared(t *testing.T) {
+	sharedMovie := domain.Movie{ID: 99, Title: "Shared Film", Year: 2010}
+
+	svc := newService(map[int][]domain.Movie{
+		1: {sharedMovie, {ID: 10, Title: "Film A", Year: 2000}},
+		2: {sharedMovie, {ID: 20, Title: "Film B", Year: 2001}},
+	})
+
+	// Actor 1 and Actor 2 share movie 99, but the user claims it was movie 10
+	// (which only Actor 1 appeared in — not a shared film).
+	result, err := svc.ValidateStep(domain.ValidateStepRequest{
+		CurrentActorID:  1,
+		NextActorID:     2,
+		MovieID:         10,
+		VisitedActorIDs: []int{},
+	})
+
+	require.NoError(t, err)
+	assert.False(t, result.Valid)
+	// The real shared movies are still returned so the client knows what was valid.
+	require.Len(t, result.ConnectingMovies, 1)
+	assert.Equal(t, sharedMovie, result.ConnectingMovies[0])
+}
+
+func TestValidateStep_InvalidWhenMovieAlreadyVisited(t *testing.T) {
+	sharedMovie := domain.Movie{ID: 99, Title: "Shared Film", Year: 2010}
+
+	svc := newService(map[int][]domain.Movie{
+		1: {sharedMovie},
+		2: {sharedMovie},
+	})
+
+	// The user names the correct shared movie, but it was already used earlier in the chain.
+	result, err := svc.ValidateStep(domain.ValidateStepRequest{
+		CurrentActorID:  1,
+		NextActorID:     2,
+		MovieID:         99,
+		VisitedActorIDs: []int{},
+		VisitedMovieIDs: []int{99},
+	})
+
+	require.NoError(t, err)
+	assert.False(t, result.Valid)
 }
 
 func TestValidateStep_UsesCacheOnSecondCall(t *testing.T) {
@@ -150,6 +204,7 @@ func TestValidateStep_UsesCacheOnSecondCall(t *testing.T) {
 	req := domain.ValidateStepRequest{
 		CurrentActorID:  1,
 		NextActorID:     2,
+		MovieID:         99,
 		VisitedActorIDs: []int{},
 	}
 

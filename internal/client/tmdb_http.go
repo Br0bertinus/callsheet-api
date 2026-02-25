@@ -111,6 +111,38 @@ func (c *TMDBHTTPClient) GetMovieCredits(actorID int) ([]domain.Movie, error) {
 	return movies, nil
 }
 
+// SearchMovies calls TMDB /search/movie and returns matching movies.
+func (c *TMDBHTTPClient) SearchMovies(query string) ([]domain.Movie, error) {
+	endpoint := fmt.Sprintf("%s/search/movie?query=%s&api_key=%s",
+		tmdbBaseURL,
+		url.QueryEscape(query),
+		c.apiKey,
+	)
+
+	var response struct {
+		Results []struct {
+			ID          int    `json:"id"`
+			Title       string `json:"title"`
+			ReleaseDate string `json:"release_date"`
+		} `json:"results"`
+	}
+
+	if err := c.get(endpoint, &response); err != nil {
+		return nil, err
+	}
+
+	movies := make([]domain.Movie, 0, len(response.Results))
+	for _, r := range response.Results {
+		movies = append(movies, domain.Movie{
+			ID:    r.ID,
+			Title: r.Title,
+			Year:  releaseYear(r.ReleaseDate),
+		})
+	}
+
+	return movies, nil
+}
+
 // get performs an HTTP GET, decodes the JSON body into dst, and returns any error.
 func (c *TMDBHTTPClient) get(url string, dst any) error {
 	resp, err := c.httpClient.Get(url)

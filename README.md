@@ -14,6 +14,7 @@ A Go REST API that powers a **Callsheet** game — a *Six Degrees of Kevin Bacon
 - [Running with Docker](#running-with-docker)
 - [API Reference](#api-reference)
   - [Search People](#get-searchpeople)
+  - [Search Movies](#get-searchmovies)
   - [Get Person](#get-peopleid)
   - [Validate Step](#post-gamevalidate-step)
 - [Error Responses](#error-responses)
@@ -24,12 +25,17 @@ A Go REST API that powers a **Callsheet** game — a *Six Degrees of Kevin Bacon
 
 ## How the Game Works
 
-Players are given **two seed actors** — a starting actor and a target actor — and must build the shortest possible chain connecting them. Each link in the chain must be two actors who appeared in a movie together. Rules:
+Players are given **two seed actors** — a starting actor and a target actor — and must build the shortest possible chain connecting them. Each link in the chain requires naming **both** the next actor and the specific movie that connects them. Rules:
 
 1. Any actor can only appear **once** in a chain — no revisiting.
-2. A step is **valid** only if the current actor and the proposed next actor share at least one movie credit.
-3. The API returns the connecting movies so the client can display proof of each link.
-4. The goal is to reach the target actor in as **few moves as possible**.
+2. Any movie can only be used **once** in a chain — no reusing the same film.
+3. A step is **valid** only if the named movie is one that both `currentActorId` and `nextActorId` actually appeared in together.
+4. The API returns all shared movies between the two actors so the client can display them as hints or confirm the correct answer.
+5. The goal is to reach the target actor in as **few moves as possible**.
+
+For example, to connect **Tom Hanks** to **Ed Norton** a valid chain might be:
+
+> Tom Hanks → *Saving Private Ryan* → Matt Damon → *Ocean's Eleven* → Brad Pitt → *Fight Club* → Ed Norton
 
 ---
 
@@ -196,6 +202,36 @@ curl "http://localhost:8080/search/people?q=Tom+Hanks"
 
 ---
 
+### `GET /search/movies`
+
+Search TMDB for movies by title. Use this to look up a movie's ID before submitting it as a chain link.
+
+**Query Parameters**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `q` | string | Yes | Title or partial title to search for |
+
+**Example Request**
+
+```bash
+curl "http://localhost:8080/search/movies?q=Saving+Private+Ryan"
+```
+
+**Example Response** `200 OK`
+
+```json
+[
+  {
+    "id": 857,
+    "title": "Saving Private Ryan",
+    "year": 1998
+  }
+]
+```
+
+---
+
 ### `GET /people/{id}`
 
 Fetch a single person by their TMDB person ID.
@@ -226,12 +262,13 @@ curl "http://localhost:8080/people/31"
 
 ### `POST /game/validate-step`
 
-Validate a proposed move in the game. Checks that:
+Validate a proposed move in the game. The player must name **both** the next actor and the specific movie that connects them. The step is rejected when:
 
-- `nextActorId` has not already been visited in this chain.
-- `currentActorId` and `nextActorId` share at least one movie credit.
+- `nextActorId` has already been visited in this chain.
+- `movieId` has already been used in this chain.
+- The named movie is not one that both actors actually appeared in together.
 
-When the step is valid the response includes all connecting movies as proof.
+The response always includes all valid shared movies between the two actors so the client can surface them as hints or confirm the answer.
 
 **Request Body**
 
@@ -239,7 +276,9 @@ When the step is valid the response includes all connecting movies as proof.
 |---|---|---|---|
 | `currentActorId` | integer | Yes | TMDB ID of the actor the player is moving **from** |
 | `nextActorId` | integer | Yes | TMDB ID of the actor the player wants to move **to** |
+| `movieId` | integer | Yes | TMDB ID of the movie the player claims connects the two actors |
 | `visitedActorIds` | integer[] | No | All actor IDs already used in the current chain (prevents revisiting) |
+| `visitedMovieIds` | integer[] | No | All movie IDs already used in the current chain (prevents reuse) |
 
 **Example Request — Valid Step**
 
@@ -249,7 +288,9 @@ curl -X POST "http://localhost:8080/game/validate-step" \
   -d '{
     "currentActorId": 31,
     "nextActorId": 287,
-    "visitedActorIds": [31]
+    "movieId": 857,
+    "visitedActorIds": [31],
+    "visitedMovieIds": []
   }'
 ```
 
@@ -273,7 +314,7 @@ curl -X POST "http://localhost:8080/game/validate-step" \
 }
 ```
 
-**Example Request — Invalid Step (already visited)**
+**Example Request — Invalid Step (wrong movie named)**
 
 ```bash
 curl -X POST "http://localhost:8080/game/validate-step" \
@@ -281,20 +322,33 @@ curl -X POST "http://localhost:8080/game/validate-step" \
   -d '{
     "currentActorId": 31,
     "nextActorId": 287,
-    "visitedActorIds": [31, 287]
+    "movieId": 999,
+    "visitedActorIds": [31],
+    "visitedMovieIds": []
   }'
 ```
 
-**Example Response** `200 OK` — step is invalid (actor already in chain)
+**Example Response** `200 OK` — step is invalid; `connectingMovies` shows what would have been valid
 
 ```json
 {
   "valid": false,
-  "connectingMovies": []
+  "connectingMovies": [
+    {
+      "id": 13,
+      "title": "Forrest Gump",
+      "year": 1994
+    },
+    {
+      "id": 857,
+      "title": "Saving Private Ryan",
+      "year": 1998
+    }
+  ]
 }
 ```
 
-**Example Response** `200 OK` — step is invalid (no shared movies)
+**Example Response** `200 OK` — step is invalid (actor already in chain or movie already used)
 
 ```json
 {
@@ -344,6 +398,7 @@ callsheet-api/
 │   ├── server.go            # Server struct, routes, graceful shutdown
 │   ├── health.go            # GET /health
 │   ├── people.go            # GET /search/people, GET /people/{id}
+│   ├── movies.go            # GET /search/movies
 │   ├── game.go              # POST /game/validate-step
 │   ├── middleware.go        # Logging middleware (method, path, status, latency)
 │   └── respond.go           # JSON/error response helpers

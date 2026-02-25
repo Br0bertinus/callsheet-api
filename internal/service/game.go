@@ -31,21 +31,38 @@ func (s *GameService) SearchPeople(query string) ([]domain.Actor, error) {
 	return s.tmdb.SearchPeople(query)
 }
 
+// SearchMovies searches TMDB for movies matching the query string.
+func (s *GameService) SearchMovies(query string) ([]domain.Movie, error) {
+	if query == "" {
+		return nil, fmt.Errorf("query must not be empty")
+	}
+
+	return s.tmdb.SearchMovies(query)
+}
+
 // GetActor returns a single actor by TMDB person ID.
 func (s *GameService) GetActor(id int) (domain.Actor, error) {
 	return s.tmdb.GetActor(id)
 }
 
-// ValidateStep checks whether moving from currentActorID to nextActorID is legal.
+// ValidateStep checks whether a user's proposed chain step is legal.
 //
 // A step is invalid when:
 //   - nextActorID appears in visitedActorIDs (actor already used)
-//   - the two actors share no movies
+//   - movieID appears in visitedMovieIDs (movie already used in the chain)
+//   - the two actors do not share the specified movie
 //
-// When valid, the response includes the movies connecting the two actors.
+// When valid, the response includes all shared movies between the two actors
+// so the client can display them as hints or confirm the correct answer.
 func (s *GameService) ValidateStep(req domain.ValidateStepRequest) (domain.ValidateStepResponse, error) {
+	empty := domain.ValidateStepResponse{Valid: false, ConnectingMovies: []domain.Movie{}}
+
 	if alreadyVisited(req.NextActorID, req.VisitedActorIDs) {
-		return domain.ValidateStepResponse{Valid: false, ConnectingMovies: []domain.Movie{}}, nil
+		return empty, nil
+	}
+
+	if alreadyVisited(req.MovieID, req.VisitedMovieIDs) {
+		return empty, nil
 	}
 
 	currentCredits, err := s.fetchCredits(req.CurrentActorID)
@@ -60,8 +77,17 @@ func (s *GameService) ValidateStep(req domain.ValidateStepRequest) (domain.Valid
 
 	shared := intersectMovies(currentCredits, nextCredits)
 
+	// The user must name the specific movie connecting the two actors.
+	namedMovieIsShared := false
+	for _, m := range shared {
+		if m.ID == req.MovieID {
+			namedMovieIsShared = true
+			break
+		}
+	}
+
 	return domain.ValidateStepResponse{
-		Valid:            len(shared) > 0,
+		Valid:            namedMovieIsShared,
 		ConnectingMovies: shared,
 	}, nil
 }
