@@ -13,6 +13,7 @@ A Go REST API that powers a **Callsheet** game — a *Six Degrees of Kevin Bacon
 - [Running the Server](#running-the-server)
 - [Running with Docker](#running-with-docker)
 - [API Reference](#api-reference)
+  - [Start Game](#post-game)
   - [Search People](#get-searchpeople)
   - [Search Movies](#get-searchmovies)
   - [Get Person](#get-peopleid)
@@ -68,6 +69,7 @@ cp .env.example .env
 | Variable | Required | Description |
 |---|---|---|
 | `TMDB_API_KEY` | Yes | API key obtained from TMDB developer portal |
+| `CORS_ORIGIN` | No | Allowed CORS origin (e.g. `https://myapp.com`). Defaults to `*` when unset — fine for local dev, set explicitly in production |
 
 ---
 
@@ -144,6 +146,44 @@ These are visible in the terminal or in the **Containers** tab of Docker Desktop
 ## API Reference
 
 All responses use `Content-Type: application/json`.
+
+---
+
+### `POST /game`
+
+Start a new game session. The player uses search to find their two chosen actors, then calls this endpoint to confirm both exist in TMDB and get their full details to bootstrap the client's game state.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `startActorId` | integer | Yes | TMDB ID of the actor the player wants to start from |
+| `targetActorId` | integer | Yes | TMDB ID of the actor the player wants to reach |
+
+**Example Request**
+
+```bash
+curl -X POST "http://localhost:8080/game" \
+  -H "Content-Type: application/json" \
+  -d '{"startActorId": 31, "targetActorId": 819}'
+```
+
+**Example Response** `201 Created`
+
+```json
+{
+  "startActor": {
+    "id": 31,
+    "name": "Tom Hanks",
+    "profilePath": "/xndWFsBlClOJFRdhSt4NBwiPq2o.jpg"
+  },
+  "targetActor": {
+    "id": 819,
+    "name": "Edward Norton",
+    "profilePath": "/8nytsqL59SFJTVYVrN72k6qkGgJ.jpg"
+  }
+}
+```
 
 ---
 
