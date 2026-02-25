@@ -36,3 +36,20 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 		)
 	})
 }
+
+// corsMiddleware sets CORS headers on every response and short-circuits
+// preflight OPTIONS requests. The allowed origin is taken from Server.CORSOrigin.
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", s.CORSOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}

@@ -16,13 +16,15 @@ import (
 type Server struct {
 	Logger      *zap.Logger
 	GameService *service.GameService
+	CORSOrigin  string
 }
 
 // New creates a Server with the provided dependencies.
-func New(logger *zap.Logger, gameSvc *service.GameService) *Server {
+func New(logger *zap.Logger, gameSvc *service.GameService, corsOrigin string) *Server {
 	return &Server{
 		Logger:      logger,
 		GameService: gameSvc,
+		CORSOrigin:  corsOrigin,
 	}
 }
 
@@ -31,12 +33,13 @@ func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", s.Health)
+	mux.HandleFunc("POST /game", s.NewGame)
 	mux.HandleFunc("GET /search/people", s.SearchPeople)
 	mux.HandleFunc("GET /search/movies", s.SearchMovies)
 	mux.HandleFunc("GET /people/{id}", s.GetPerson)
 	mux.HandleFunc("POST /game/validate-step", s.ValidateStep)
 
-	return s.loggingMiddleware(mux)
+	return s.corsMiddleware(s.loggingMiddleware(mux))
 }
 
 // Start begins listening for HTTP requests on the given address and blocks until

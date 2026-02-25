@@ -28,3 +28,15 @@ type ValidateStepResponse struct {
 	Valid            bool    `json:"valid"`
 	ConnectingMovies []Movie `json:"connectingMovies"` // all valid shared movies (for client hints)
 }
+
+// NewGameRequest is the body for POST /game.
+type NewGameRequest struct {
+	StartActorID  int `json:"startActorId"`
+	TargetActorID int `json:"targetActorId"`
+}
+
+// NewGameResponse is the response for POST /game.
+type NewGameResponse struct {
+	StartActor  Actor `json:"startActor"`
+	TargetActor Actor `json:"targetActor"`
+}

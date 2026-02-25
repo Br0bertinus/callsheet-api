@@ -7,6 +7,35 @@ import (
 	"github.com/Br0bertinus/callsheet-api/internal/domain"
 )
 
+// NewGame handles POST /game.
+// The client supplies the two actor IDs they want to connect; the server confirms
+// both exist in TMDB and returns their full details to bootstrap the game session.
+func (s *Server) NewGame(w http.ResponseWriter, r *http.Request) {
+	var req domain.NewGameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.StartActorID <= 0 || req.TargetActorID <= 0 {
+		s.writeError(w, http.StatusBadRequest, "startActorId and targetActorId must be positive integers")
+		return
+	}
+
+	if req.StartActorID == req.TargetActorID {
+		s.writeError(w, http.StatusBadRequest, "startActorId and targetActorId must be different")
+		return
+	}
+
+	result, err := s.GameService.NewGame(req.StartActorID, req.TargetActorID)
+	if err != nil {
+		s.writeError(w, http.StatusBadGateway, "failed to start game")
+		return
+	}
+
+	s.writeJSON(w, http.StatusCreated, result)
+}
+
 // ValidateStep handles POST /game/validate-step.
 func (s *Server) ValidateStep(w http.ResponseWriter, r *http.Request) {
 	var req domain.ValidateStepRequest

@@ -45,6 +45,25 @@ func (s *GameService) GetActor(id int) (domain.Actor, error) {
 	return s.tmdb.GetActor(id)
 }
 
+// NewGame validates that both actor IDs exist in TMDB and returns their details
+// to bootstrap a game session on the client.
+func (s *GameService) NewGame(startActorID, targetActorID int) (domain.NewGameResponse, error) {
+	startActor, err := s.tmdb.GetActor(startActorID)
+	if err != nil {
+		return domain.NewGameResponse{}, fmt.Errorf("could not fetch start actor %d: %w", startActorID, err)
+	}
+
+	targetActor, err := s.tmdb.GetActor(targetActorID)
+	if err != nil {
+		return domain.NewGameResponse{}, fmt.Errorf("could not fetch target actor %d: %w", targetActorID, err)
+	}
+
+	return domain.NewGameResponse{
+		StartActor:  startActor,
+		TargetActor: targetActor,
+	}, nil
+}
+
 // ValidateStep checks whether a user's proposed chain step is legal.
 //
 // A step is invalid when:
