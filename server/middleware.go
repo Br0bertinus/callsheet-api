@@ -1,9 +1,10 @@
-package handlers
+package server
 
 import (
-	"log"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // responseRecorder wraps http.ResponseWriter to capture the status code written
@@ -18,15 +19,20 @@ func (rr *responseRecorder) WriteHeader(code int) {
 	rr.ResponseWriter.WriteHeader(code)
 }
 
-// LoggingMiddleware logs the method, path, response status, and elapsed time
+// loggingMiddleware logs the method, path, response status, and elapsed time
 // for every incoming request.
-func LoggingMiddleware(next http.Handler) http.Handler {
+func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
 		rr := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rr, r)
 
-		log.Printf("%s %s -> %d (%s)", r.Method, r.URL.Path, rr.status, time.Since(start))
+		s.Logger.Info("request",
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.Int("status", rr.status),
+			zap.Duration("duration", time.Since(start)),
+		)
 	})
 }
