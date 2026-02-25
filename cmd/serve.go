@@ -42,6 +42,11 @@ func runServe(_ *cobra.Command, _ []string) error {
 	creditCache := cache.NewMemoryCache(30 * time.Minute)
 	gameSvc := service.NewGameService(tmdbClient, creditCache)
 
-	srv := server.New(logger, gameSvc)
+	corsOrigin := os.Getenv("CORS_ORIGIN")
+	if corsOrigin == "" {
+		corsOrigin = "*"
+	}
+
+	srv := server.New(logger, gameSvc, corsOrigin)
 	return srv.Start(addr)
 }
