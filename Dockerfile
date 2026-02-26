@@ -22,4 +22,4 @@ COPY --from=builder /callsheet-api .
 
 EXPOSE 8080
 
-ENTRYPOINT ["./callsheet-api"]
+ENTRYPOINT ["./callsheet-api", "serve"]
