@@ -9,7 +9,7 @@ RUN go mod download
 
 # Copy source and build a statically linked binary
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /callsheet-api ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /callsheet-api .
 
 # ---- Runtime stage ----
 FROM alpine:latest
