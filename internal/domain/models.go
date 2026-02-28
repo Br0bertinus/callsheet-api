@@ -9,9 +9,10 @@ type Actor struct {
 
 // Movie represents a film shared between two actors during step validation.
 type Movie struct {
-	ID    int    `json:"id"`
-	Title string `json:"title"`
-	Year  int    `json:"year"`
+	ID         int    `json:"id"`
+	Title      string `json:"title"`
+	Year       int    `json:"year"`
+	PosterPath string `json:"posterPath"`
 }
 
 // ValidateStepRequest is the body for POST /game/validate-step.
