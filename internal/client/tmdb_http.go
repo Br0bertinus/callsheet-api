@@ -14,6 +14,53 @@ import (
 
 const tmdbBaseURL = "https://api.themoviedb.org/3"
 
+// tmdbPerson represents a person object in TMDB API responses.
+type tmdbPerson struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	ProfilePath string `json:"profile_path"`
+}
+
+func (p tmdbPerson) toDomain() domain.Actor {
+	return domain.Actor{
+		ID:          p.ID,
+		Name:        p.Name,
+		ProfilePath: p.ProfilePath,
+	}
+}
+
+// tmdbMovie represents a movie object in TMDB API responses.
+type tmdbMovie struct {
+	ID          int    `json:"id"`
+	Title       string `json:"title"`
+	ReleaseDate string `json:"release_date"`
+	PosterPath  string `json:"poster_path"`
+}
+
+func (m tmdbMovie) toDomain() domain.Movie {
+	return domain.Movie{
+		ID:         m.ID,
+		Title:      m.Title,
+		Year:       releaseYear(m.ReleaseDate),
+		PosterPath: m.PosterPath,
+	}
+}
+
+// tmdbSearchPersonResponse is the envelope for /search/person.
+type tmdbSearchPersonResponse struct {
+	Results []tmdbPerson `json:"results"`
+}
+
+// tmdbSearchMovieResponse is the envelope for /search/movie.
+type tmdbSearchMovieResponse struct {
+	Results []tmdbMovie `json:"results"`
+}
+
+// tmdbMovieCreditsResponse is the envelope for /person/{id}/movie_credits.
+type tmdbMovieCreditsResponse struct {
+	Cast []tmdbMovie `json:"cast"`
+}
+
 // TMDBHTTPClient makes real HTTP requests to the TMDB API.
 type TMDBHTTPClient struct {
 	apiKey     string
@@ -38,13 +85,7 @@ func (c *TMDBHTTPClient) SearchPeople(query string) ([]domain.Actor, error) {
 		c.apiKey,
 	)
 
-	var response struct {
-		Results []struct {
-			ID          int    `json:"id"`
-			Name        string `json:"name"`
-			ProfilePath string `json:"profile_path"`
-		} `json:"results"`
-	}
+	var response tmdbSearchPersonResponse
 
 	if err := c.get(endpoint, &response); err != nil {
 		return nil, err
@@ -52,11 +93,7 @@ func (c *TMDBHTTPClient) SearchPeople(query string) ([]domain.Actor, error) {
 
 	actors := make([]domain.Actor, 0, len(response.Results))
 	for _, r := range response.Results {
-		actors = append(actors, domain.Actor{
-			ID:          r.ID,
-			Name:        r.Name,
-			ProfilePath: r.ProfilePath,
-		})
+		actors = append(actors, r.toDomain())
 	}
 
 	return actors, nil
@@ -66,34 +103,20 @@ func (c *TMDBHTTPClient) SearchPeople(query string) ([]domain.Actor, error) {
 func (c *TMDBHTTPClient) GetActor(id int) (domain.Actor, error) {
 	endpoint := fmt.Sprintf("%s/person/%d?api_key=%s", tmdbBaseURL, id, c.apiKey)
 
-	var response struct {
-		ID          int    `json:"id"`
-		Name        string `json:"name"`
-		ProfilePath string `json:"profile_path"`
-	}
+	var response tmdbPerson
 
 	if err := c.get(endpoint, &response); err != nil {
 		return domain.Actor{}, err
 	}
 
-	return domain.Actor{
-		ID:          response.ID,
-		Name:        response.Name,
-		ProfilePath: response.ProfilePath,
-	}, nil
+	return response.toDomain(), nil
 }
 
 // GetMovieCredits calls TMDB /person/{id}/movie_credits and returns the cast filmography.
 func (c *TMDBHTTPClient) GetMovieCredits(actorID int) ([]domain.Movie, error) {
 	endpoint := fmt.Sprintf("%s/person/%d/movie_credits?api_key=%s", tmdbBaseURL, actorID, c.apiKey)
 
-	var response struct {
-		Cast []struct {
-			ID          int    `json:"id"`
-			Title       string `json:"title"`
-			ReleaseDate string `json:"release_date"`
-		} `json:"cast"`
-	}
+	var response tmdbMovieCreditsResponse
 
 	if err := c.get(endpoint, &response); err != nil {
 		return nil, err
@@ -101,11 +124,7 @@ func (c *TMDBHTTPClient) GetMovieCredits(actorID int) ([]domain.Movie, error) {
 
 	movies := make([]domain.Movie, 0, len(response.Cast))
 	for _, m := range response.Cast {
-		movies = append(movies, domain.Movie{
-			ID:    m.ID,
-			Title: m.Title,
-			Year:  releaseYear(m.ReleaseDate),
-		})
+		movies = append(movies, m.toDomain())
 	}
 
 	return movies, nil
@@ -119,13 +138,7 @@ func (c *TMDBHTTPClient) SearchMovies(query string) ([]domain.Movie, error) {
 		c.apiKey,
 	)
 
-	var response struct {
-		Results []struct {
-			ID          int    `json:"id"`
-			Title       string `json:"title"`
-			ReleaseDate string `json:"release_date"`
-		} `json:"results"`
-	}
+	var response tmdbSearchMovieResponse
 
 	if err := c.get(endpoint, &response); err != nil {
 		return nil, err
@@ -133,11 +146,7 @@ func (c *TMDBHTTPClient) SearchMovies(query string) ([]domain.Movie, error) {
 
 	movies := make([]domain.Movie, 0, len(response.Results))
 	for _, r := range response.Results {
-		movies = append(movies, domain.Movie{
-			ID:    r.ID,
-			Title: r.Title,
-			Year:  releaseYear(r.ReleaseDate),
-		})
+		movies = append(movies, r.toDomain())
 	}
 
 	return movies, nil
