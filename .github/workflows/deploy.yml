@@ -1,17 +1,16 @@
-name: Deploy
+name: Trigger Deploy
 
 on:
   push:
     branches: [main]
 
 jobs:
-  deploy:
+  trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1
+      - name: Trigger deploy
+        uses: peter-evans/repository-dispatch@v3
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: ~/projects/callsheet-deploy/scripts/deploy.sh
+          token: ${{ secrets.GH_PAT }}
+          repository: ${{ github.repository_owner }}/callsheet-deploy
+          event-type: deploy
