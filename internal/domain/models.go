@@ -2,17 +2,19 @@ package domain
 
 // Actor represents a person returned from TMDB search or lookup.
 type Actor struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	ProfilePath string `json:"profilePath"`
+	ID          int     `json:"id"`
+	Name        string  `json:"name"`
+	ProfilePath string  `json:"profilePath"`
+	Popularity  float64 `json:"popularity"`
 }
 
 // Movie represents a film shared between two actors during step validation.
 type Movie struct {
-	ID         int    `json:"id"`
-	Title      string `json:"title"`
-	Year       int    `json:"year"`
-	PosterPath string `json:"posterPath"`
+	ID         int     `json:"id"`
+	Title      string  `json:"title"`
+	Year       int     `json:"year"`
+	PosterPath string  `json:"posterPath"`
+	Popularity float64 `json:"popularity"`
 }
 
 // ValidateStepRequest is the body for POST /game/validate-step.
