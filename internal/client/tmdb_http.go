@@ -16,9 +16,10 @@ const tmdbBaseURL = "https://api.themoviedb.org/3"
 
 // tmdbPerson represents a person object in TMDB API responses.
 type tmdbPerson struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	ProfilePath string `json:"profile_path"`
+	ID          int     `json:"id"`
+	Name        string  `json:"name"`
+	ProfilePath string  `json:"profile_path"`
+	Popularity  float64 `json:"popularity"`
 }
 
 func (p tmdbPerson) toDomain() domain.Actor {
@@ -26,15 +27,17 @@ func (p tmdbPerson) toDomain() domain.Actor {
 		ID:          p.ID,
 		Name:        p.Name,
 		ProfilePath: p.ProfilePath,
+		Popularity:  p.Popularity,
 	}
 }
 
 // tmdbMovie represents a movie object in TMDB API responses.
 type tmdbMovie struct {
-	ID          int    `json:"id"`
-	Title       string `json:"title"`
-	ReleaseDate string `json:"release_date"`
-	PosterPath  string `json:"poster_path"`
+	ID          int     `json:"id"`
+	Title       string  `json:"title"`
+	ReleaseDate string  `json:"release_date"`
+	PosterPath  string  `json:"poster_path"`
+	Popularity  float64 `json:"popularity"`
 }
 
 func (m tmdbMovie) toDomain() domain.Movie {
@@ -43,6 +46,7 @@ func (m tmdbMovie) toDomain() domain.Movie {
 		Title:      m.Title,
 		Year:       releaseYear(m.ReleaseDate),
 		PosterPath: m.PosterPath,
+		Popularity: m.Popularity,
 	}
 }
 
