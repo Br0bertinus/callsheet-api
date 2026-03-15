@@ -37,6 +37,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /search/people", s.SearchPeople)
 	mux.HandleFunc("GET /search/movies", s.SearchMovies)
 	mux.HandleFunc("GET /people/{id}", s.GetPerson)
+	mux.HandleFunc("GET /game/daily", s.DailyChallenge)
 	mux.HandleFunc("POST /game/validate-step", s.ValidateStep)
 
 	return s.corsMiddleware(s.loggingMiddleware(mux))

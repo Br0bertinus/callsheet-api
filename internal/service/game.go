@@ -2,6 +2,12 @@ package service
 
 import (
 	"fmt"
+	"hash/fnv"
+	"math/rand"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/Br0bertinus/callsheet-api/internal/cache"
 	"github.com/Br0bertinus/callsheet-api/internal/client"
@@ -62,6 +68,49 @@ func (s *GameService) NewGame(startActorID, targetActorID int) (domain.NewGameRe
 		StartActor:  startActor,
 		TargetActor: targetActor,
 	}, nil
+}
+
+// DailyChallenge returns the fixed start/target actor pair for today's UTC date.
+//
+// Override priority (highest to lowest):
+//  1. Env var DAILY_CHALLENGE_OVERRIDE=<startID>,<targetID>  — hot override, no redeploy needed.
+//  2. dailyOverrides map in daily_overrides.go              — planned editorial overrides.
+//  3. Seeded PRNG derived from today's UTC date string      — default behaviour.
+func (s *GameService) DailyChallenge() (domain.NewGameResponse, error) {
+	dateStr := time.Now().UTC().Format("2006-01-02")
+
+	// 1. Runtime env var: DAILY_CHALLENGE_OVERRIDE=startID,targetID
+	if raw := os.Getenv("DAILY_CHALLENGE_OVERRIDE"); raw != "" {
+		parts := strings.SplitN(raw, ",", 2)
+		if len(parts) == 2 {
+			startID, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+			targetID, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+			if err1 == nil && err2 == nil && startID != targetID {
+				return s.NewGame(startID, targetID)
+			}
+		}
+	}
+
+	// 2. Code-level override map (daily_overrides.go).
+	if pair, ok := dailyOverrides[dateStr]; ok {
+		return s.NewGame(pair[0], pair[1])
+	}
+
+	// 3. Default: deterministic PRNG seeded from the UTC date string.
+	h := fnv.New64a()
+	h.Write([]byte(dateStr))
+	seed := int64(h.Sum64())
+
+	rng := rand.New(rand.NewSource(seed)) //nolint:gosec // seeded PRNG for game logic, not security
+
+	n := len(dailyActorPool)
+	i := rng.Intn(n)
+	j := rng.Intn(n - 1)
+	if j >= i {
+		j++ // shift to avoid collision without bias
+	}
+
+	return s.NewGame(dailyActorPool[i], dailyActorPool[j])
 }
 
 // ValidateStep checks whether a user's proposed chain step is legal.
