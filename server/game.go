@@ -36,6 +36,19 @@ func (s *Server) NewGame(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusCreated, result)
 }
 
+// DailyChallenge handles GET /game/daily.
+// It returns the same start/target actor pair for every caller on the same
+// UTC calendar day. No authentication required.
+func (s *Server) DailyChallenge(w http.ResponseWriter, r *http.Request) {
+	result, err := s.GameService.DailyChallenge()
+	if err != nil {
+		s.writeError(w, http.StatusBadGateway, "failed to fetch daily challenge")
+		return
+	}
+
+	s.writeJSON(w, http.StatusOK, result)
+}
+
 // ValidateStep handles POST /game/validate-step.
 func (s *Server) ValidateStep(w http.ResponseWriter, r *http.Request) {
 	var req domain.ValidateStepRequest
