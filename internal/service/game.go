@@ -70,14 +70,37 @@ func (s *GameService) NewGame(startActorID, targetActorID int) (domain.NewGameRe
 	}, nil
 }
 
-// DailyChallenge returns the fixed start/target actor pair for today's UTC date.
+// gameDate returns the current "game day" string (YYYY-MM-DD).
+//
+// The daily challenge rolls over at 01:00 America/Los_Angeles (Pacific time,
+// DST-aware) rather than midnight UTC so that US users always see the new
+// puzzle after a reasonable overnight gap. Concretely: we shift the clock back
+// one hour before extracting the date, so anything before 01:00 Pacific is
+// still treated as the previous calendar day.
+//
+// If the America/Los_Angeles timezone cannot be loaded (e.g. tzdata is missing
+// from the runtime image) the function falls back to a fixed UTC-8 offset,
+// which is PST without DST adjustment.
+func gameDate() string {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		// Fallback: fixed UTC-8 (PST, no DST)
+		loc = time.FixedZone("PST", -8*60*60)
+	}
+
+	// Subtract one hour so the rollover occurs at 01:00 Pacific, not midnight.
+	t := time.Now().In(loc).Add(-1 * time.Hour)
+	return t.Format("2006-01-02")
+}
+
+// DailyChallenge returns the fixed start/target actor pair for the current game day.
 //
 // Override priority (highest to lowest):
 //  1. Env var DAILY_CHALLENGE_OVERRIDE=<startID>,<targetID>  — hot override, no redeploy needed.
 //  2. dailyOverrides map in daily_overrides.go              — planned editorial overrides.
-//  3. Seeded PRNG derived from today's UTC date string      — default behaviour.
+//  3. Seeded PRNG derived from the game-day date string     — default behaviour.
 func (s *GameService) DailyChallenge() (domain.NewGameResponse, error) {
-	dateStr := time.Now().UTC().Format("2006-01-02")
+	dateStr := gameDate()
 
 	// 1. Runtime env var: DAILY_CHALLENGE_OVERRIDE=startID,targetID
 	if raw := os.Getenv("DAILY_CHALLENGE_OVERRIDE"); raw != "" {

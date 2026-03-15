@@ -154,7 +154,7 @@ All responses use `Content-Type: application/json`.
 
 ### `GET /game/daily`
 
-Returns today's fixed start/target actor pair. Every caller on the same UTC calendar day receives the **same two actors**, so all players are solving the identical challenge. The pair is derived deterministically from the date — no randomness per request — and rotates automatically at **00:00 UTC**.
+Returns today's fixed start/target actor pair. Every caller on the same **game day** receives the **same two actors**, so all players are solving the identical challenge. The pair is derived deterministically from the date — no randomness per request — and rotates automatically at **01:00 America/Los_Angeles** (Pacific time, DST-aware).
 
 No authentication required. No request body.
 
@@ -472,7 +472,9 @@ On each request to `GET /game/daily` the server applies the following priority o
 
 1. **Env var override** — set `DAILY_CHALLENGE_OVERRIDE=<startId>,<targetId>` to immediately force a specific pair for all users without redeploying. Unset it when the day is over.
 2. **Code-level override map** — add an entry to `internal/service/daily_overrides.go` for planned editorial picks (e.g. Oscar night, a film anniversary). Commit and deploy ahead of time; stale entries are ignored automatically.
-3. **Seeded PRNG** — the UTC date string (`"2026-03-14"`) is hashed with FNV-64a to seed a local `rand`, which picks two distinct actors from the pool. Same date always yields the same pair.
+3. **Seeded PRNG** — the game-day date string is hashed with FNV-64a to seed a local `rand`, which picks two distinct actors from the pool. Same date always yields the same pair.
+
+The game day rolls over at **01:00 America/Los_Angeles** (Pacific time, DST-aware). Anything before 1 AM Pacific is still counted as the previous day's challenge, so US players always wake up to the new puzzle.
 
 ### Actor pool
 

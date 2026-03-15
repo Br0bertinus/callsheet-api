@@ -15,7 +15,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /callsheet-api .
 FROM alpine:latest
 
 # ca-certificates is required for outbound HTTPS calls (e.g. TMDB API)
-RUN apk --no-cache add ca-certificates
+# tzdata is required for time.LoadLocation (used for Pacific-time daily challenge rollover)
+RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 COPY --from=builder /callsheet-api .
