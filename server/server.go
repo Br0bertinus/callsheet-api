@@ -44,7 +44,7 @@ func (s *Server) routes() http.Handler {
 
 // Start begins listening for HTTP requests on the given address and blocks until
 // an interrupt or SIGTERM signal is received, then shuts down gracefully.
-func (s *Server) Start(addr string) error {
+func (s *Server) Start(addr string, shutdownTimeout time.Duration) error {
 	h := &http.Server{
 		Addr:    addr,
 		Handler: s.routes(),
@@ -65,7 +65,7 @@ func (s *Server) Start(addr string) error {
 
 	s.Logger.Info("shutting down the server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	if err := h.Shutdown(ctx); err != nil {

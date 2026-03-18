@@ -9,7 +9,7 @@ A Go REST API that powers a **Callsheet** game — a *Six Degrees of Kevin Bacon
 - [How the Game Works](#how-the-game-works)
 - [Requirements](#requirements)
 - [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
+- [Configuration](#configuration)
 - [Running the Server](#running-the-server)
 - [Running with Docker](#running-with-docker)
 - [API Reference](#api-reference)
@@ -57,36 +57,63 @@ cd callsheet-api
 go mod download
 ```
 
-Copy the example environment file and add your key:
+Set your TMDB read access token as an environment variable:
 
 ```bash
-cp .env.example .env
-# edit .env and set TMDB_API_KEY=<your key>
+export TMDB_API_KEY=your_token_here
 ```
+
+All other configuration is in [`config.yaml`](config.yaml) at the project root. The defaults work out of the box for local development.
 
 ---
 
-## Environment Variables
+## Configuration
+
+The application is configured through two mechanisms:
+
+**`config.yaml`** (committed to source control) — all non-secret settings with sensible defaults:
+
+```yaml
+server:
+  addr: ":8080"              # listen address
+  shutdown_timeout: "10s"    # graceful shutdown window
+
+cors:
+  origin: "*"                # set to your frontend URL in production
+
+tmdb:
+  base_url: "https://api.themoviedb.org/3"
+  timeout: "10s"             # per-request HTTP timeout
+  endpoints:                 # all TMDB paths consumed by this service
+    search_person: "/search/person"
+    search_movie:  "/search/movie"
+    get_person:    "/person/{id}"
+    get_movie_credits: "/person/{id}/movie_credits"
+
+cache:
+  ttl: "30m"                 # how long actor credit lookups are cached in memory
+
+game:
+  rollover_timezone: "America/Los_Angeles"
+  rollover_hour: 1           # daily challenge rolls over at 01:00 in that timezone
+```
+
+**Environment variable** (never committed) — secrets only:
 
 | Variable | Required | Description |
 |---|---|---|
-| `TMDB_API_KEY` | Yes | API read access token obtained from TMDB developer portal |
-| `CORS_ORIGIN` | No | Allowed CORS origin (e.g. `https://myapp.com`). Defaults to `*` when unset — fine for local dev, set explicitly in production |
+| `TMDB_API_KEY` | Yes | Read access token from the [TMDB developer portal](https://developer.themoviedb.org/docs/getting-started). Sent as a `Bearer` token — never appears in URLs or logs. |
 
 ---
 
 ## Running the Server
 
 ```bash
-export TMDB_API_KEY=your_key_here
+export TMDB_API_KEY=your_token_here
 go run . serve
 ```
 
-The server starts on **`:8080`** by default. To use a different address:
-
-```bash
-go run . serve --addr :9090
-```
+The listen address and all other settings are read from `config.yaml`. Edit that file to change any value.
 
 ---
 
@@ -105,16 +132,22 @@ docker build -t callsheet-api .
 ### Run the container
 
 ```bash
-docker run -p 8080:8080 -e TMDB_API_KEY=your_key_here callsheet-api
+docker run -p 8080:8080 -e TMDB_API_KEY=your_token_here callsheet-api
 ```
 
-Or use a `.env` file to avoid passing the key inline:
+Or use a `.env` file to avoid passing the token inline:
 
 ```bash
 docker run -p 8080:8080 --env-file .env callsheet-api
 ```
 
-The API is available at `http://localhost:8080` once the container starts. Stop it with `Ctrl+C`.
+`config.yaml` is copied into the image at build time, so all non-secret settings are baked in. Only `TMDB_API_KEY` needs to be supplied at runtime. To override a value without rebuilding, mount a replacement file:
+
+```bash
+docker run -p 8080:8080 -e TMDB_API_KEY=your_token_here \
+  -v $(pwd)/config.yaml:/app/config.yaml \
+  callsheet-api
+```
 
 ### Useful commands
 
@@ -473,7 +506,7 @@ On each request to `GET /game/daily` the server applies the following priority o
 1. **Code-level override map** — add an entry to `internal/service/daily_overrides.go` for planned editorial picks (e.g. Oscar night, a film anniversary). Commit and deploy ahead of time; stale entries are ignored automatically.
 2. **Seeded PRNG** — the game-day date string is hashed with FNV-64a to seed a local `rand`, which picks two distinct actors from the pool. Same date always yields the same pair.
 
-The game day rolls over at **01:00 America/Los_Angeles** (Pacific time, DST-aware). Anything before 1 AM Pacific is still counted as the previous day's challenge, so US players always wake up to the new puzzle.
+The game day rolls over at **01:00 America/Los_Angeles** (Pacific time, DST-aware) by default. Anything before 1 AM Pacific is still counted as the previous day's challenge, so US players always wake up to the new puzzle. Both the timezone and rollover hour are configurable in `config.yaml` under `game.rollover_timezone` and `game.rollover_hour`.
 
 ### Actor pool
 
@@ -504,9 +537,10 @@ Exits `0` when all IDs match, `1` with a mismatch/not-found report otherwise —
 ```
 callsheet-api/
 ├── main.go                  # Entry point — calls cmd.Execute()
+├── config.yaml              # All non-secret configuration (addr, timeouts, CORS, cache TTL, etc.)
 ├── cmd/
 │   ├── root.go              # Root Cobra command and Execute()
-│   └── serve.go             # `serve` subcommand — initializes dependencies and starts server
+│   └── serve.go             # `serve` subcommand — loads config, initializes dependencies, starts server
 ├── server/
 │   ├── server.go            # Server struct, routes, graceful shutdown
 │   ├── game_service.go      # GameServicer interface (consumed by Server)
@@ -519,11 +553,13 @@ callsheet-api/
 │   └── mocks/
 │       └── mock_game_service.go  # mockgen-generated mock of GameServicer (for handler tests)
 ├── internal/
+│   ├── config/
+│   │   └── config.go        # Typed config structs; Viper-based loader (reads config.yaml + env)
 │   ├── cache/
 │   │   ├── cache.go         # Cache interface
-│   │   └── memory.go        # In-memory cache with TTL (default 30 min)
+│   │   └── memory.go        # In-memory cache with TTL
 │   ├── client/
-│   │   ├── tmdb.go          # TMDBClient interface
+│   │   ├── tmdb.go          # TMDBClient interface + ErrNotFound sentinel
 │   │   └── tmdb_http.go     # HTTP implementation backed by TMDB API v3
 │   ├── domain/
 │   │   └── models.go        # Shared domain types (Actor, Movie, request/response structs)
