@@ -8,19 +8,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Br0bertinus/callsheet-api/internal/service"
 	"go.uber.org/zap"
 )
 
 // Server holds the dependencies shared across HTTP handlers.
 type Server struct {
 	Logger      *zap.Logger
-	GameService *service.GameService
+	GameService GameServicer
 	CORSOrigin  string
 }
 
 // New creates a Server with the provided dependencies.
-func New(logger *zap.Logger, gameSvc *service.GameService, corsOrigin string) *Server {
+func New(logger *zap.Logger, gameSvc GameServicer, corsOrigin string) *Server {
 	return &Server{
 		Logger:      logger,
 		GameService: gameSvc,
