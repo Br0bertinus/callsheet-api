@@ -70,9 +70,8 @@ cp .env.example .env
 
 | Variable | Required | Description |
 |---|---|---|
-| `TMDB_API_KEY` | Yes | API key obtained from TMDB developer portal |
+| `TMDB_API_KEY` | Yes | API read access token obtained from TMDB developer portal |
 | `CORS_ORIGIN` | No | Allowed CORS origin (e.g. `https://myapp.com`). Defaults to `*` when unset — fine for local dev, set explicitly in production |
-| `DAILY_CHALLENGE_OVERRIDE` | No | Hot-override today's daily challenge pair without redeploying. Format: `<startActorId>,<targetActorId>` (e.g. `500,287`). Takes precedence over all other selection logic for as long as the variable is set. |
 
 ---
 
@@ -206,7 +205,7 @@ curl -X POST "http://localhost:8080/game" \
   -d '{"startActorId": 31, "targetActorId": 819}'
 ```
 
-**Example Response** `201 Created`
+**Example Response** `200 OK`
 
 ```json
 {
@@ -450,7 +449,8 @@ All errors return a JSON body with a single `error` field.
 | Status | Meaning |
 |---|---|
 | `400 Bad Request` | Missing or malformed request parameters / body |
-| `502 Bad Gateway` | TMDB upstream request failed |
+| `404 Not Found` | The requested actor or person does not exist in TMDB |
+| `502 Bad Gateway` | TMDB upstream request failed (network error or unexpected status) |
 
 ---
 
@@ -470,9 +470,8 @@ The service layer uses an in‑memory fake TMDB client so tests run without a ne
 
 On each request to `GET /game/daily` the server applies the following priority order:
 
-1. **Env var override** — set `DAILY_CHALLENGE_OVERRIDE=<startId>,<targetId>` to immediately force a specific pair for all users without redeploying. Unset it when the day is over.
-2. **Code-level override map** — add an entry to `internal/service/daily_overrides.go` for planned editorial picks (e.g. Oscar night, a film anniversary). Commit and deploy ahead of time; stale entries are ignored automatically.
-3. **Seeded PRNG** — the game-day date string is hashed with FNV-64a to seed a local `rand`, which picks two distinct actors from the pool. Same date always yields the same pair.
+1. **Code-level override map** — add an entry to `internal/service/daily_overrides.go` for planned editorial picks (e.g. Oscar night, a film anniversary). Commit and deploy ahead of time; stale entries are ignored automatically.
+2. **Seeded PRNG** — the game-day date string is hashed with FNV-64a to seed a local `rand`, which picks two distinct actors from the pool. Same date always yields the same pair.
 
 The game day rolls over at **01:00 America/Los_Angeles** (Pacific time, DST-aware). Anything before 1 AM Pacific is still counted as the previous day's challenge, so US players always wake up to the new puzzle.
 
@@ -510,12 +509,15 @@ callsheet-api/
 │   └── serve.go             # `serve` subcommand — initializes dependencies and starts server
 ├── server/
 │   ├── server.go            # Server struct, routes, graceful shutdown
+│   ├── game_service.go      # GameServicer interface (consumed by Server)
 │   ├── health.go            # GET /health
 │   ├── people.go            # GET /search/people, GET /people/{id}
 │   ├── movies.go            # GET /search/movies
 │   ├── game.go              # POST /game, GET /game/daily, POST /game/validate-step
 │   ├── middleware.go        # Logging middleware (method, path, status, latency)
-│   └── respond.go           # JSON/error response helpers
+│   ├── respond.go           # JSON/error response helpers
+│   └── mocks/
+│       └── mock_game_service.go  # mockgen-generated mock of GameServicer (for handler tests)
 ├── internal/
 │   ├── cache/
 │   │   ├── cache.go         # Cache interface
