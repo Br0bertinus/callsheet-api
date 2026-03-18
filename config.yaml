@@ -1,0 +1,22 @@
+server:
+  addr: ":8080"
+  shutdown_timeout: "10s"
+
+cors:
+  origin: "*"
+
+tmdb:
+  base_url: "https://api.themoviedb.org/3"
+  timeout: "10s"
+  endpoints:
+    search_person: "/search/person"
+    search_movie: "/search/movie"
+    get_person: "/person/{id}"
+    get_movie_credits: "/person/{id}/movie_credits"
+
+cache:
+  ttl: "30m"
+
+game:
+  rollover_timezone: "America/Los_Angeles"
+  rollover_hour: 1

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Br0bertinus/callsheet-api/internal/cache"
+	"github.com/Br0bertinus/callsheet-api/internal/config"
 	"github.com/Br0bertinus/callsheet-api/internal/domain"
 	"github.com/Br0bertinus/callsheet-api/internal/service"
 )
@@ -39,7 +40,8 @@ func (m *mockTMDB) SearchMovies(_ string) ([]domain.Movie, error) {
 func newService(credits map[int][]domain.Movie) *service.GameService {
 	tmdb := &mockTMDB{credits: credits}
 	c := cache.NewMemoryCache(0) // TTL 0 means entries never expire during tests.
-	return service.NewGameService(tmdb, c)
+	cfg := config.GameConfig{RolloverTimezone: "America/Los_Angeles", RolloverHour: 1}
+	return service.NewGameService(tmdb, c, cfg)
 }
 
 // --- ValidateStep tests ---
@@ -199,7 +201,7 @@ func TestValidateStep_UsesCacheOnSecondCall(t *testing.T) {
 	c := cache.NewMemoryCache(0)
 
 	// Prime the cache for actor 1 manually by calling ValidateStep twice.
-	svc := service.NewGameService(tmdb, c)
+	svc := service.NewGameService(tmdb, c, config.GameConfig{RolloverTimezone: "America/Los_Angeles", RolloverHour: 1})
 
 	req := domain.ValidateStepRequest{
 		CurrentActorID:  1,

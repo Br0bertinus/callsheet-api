@@ -7,12 +7,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/Br0bertinus/callsheet-api/internal/config"
 	"github.com/Br0bertinus/callsheet-api/internal/domain"
 )
-
-const tmdbBaseURL = "https://api.themoviedb.org/3"
 
 // tmdbPerson represents a person object in TMDB API responses.
 type tmdbPerson struct {
@@ -67,27 +65,23 @@ type tmdbMovieCreditsResponse struct {
 
 // TMDBHTTPClient makes real HTTP requests to the TMDB API.
 type TMDBHTTPClient struct {
-	apiKey     string
+	cfg        config.TMDBConfig
 	httpClient *http.Client
 }
 
-// NewTMDBHTTPClient creates a real TMDB client using the provided API key.
-func NewTMDBHTTPClient(apiKey string) *TMDBHTTPClient {
+// NewTMDBHTTPClient creates a real TMDB client using the provided config.
+func NewTMDBHTTPClient(cfg config.TMDBConfig) *TMDBHTTPClient {
 	return &TMDBHTTPClient{
-		apiKey: apiKey,
+		cfg: cfg,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: cfg.Timeout,
 		},
 	}
 }
 
 // SearchPeople calls TMDB /search/person and returns matching actors.
 func (c *TMDBHTTPClient) SearchPeople(query string) ([]domain.Actor, error) {
-	endpoint := fmt.Sprintf("%s/search/person?query=%s&api_key=%s",
-		tmdbBaseURL,
-		url.QueryEscape(query),
-		c.apiKey,
-	)
+	endpoint := c.cfg.BaseURL + c.cfg.Endpoints.SearchPerson + "?query=" + url.QueryEscape(query)
 
 	var response tmdbSearchPersonResponse
 
@@ -105,7 +99,8 @@ func (c *TMDBHTTPClient) SearchPeople(query string) ([]domain.Actor, error) {
 
 // GetActor calls TMDB /person/{id} and returns a single actor.
 func (c *TMDBHTTPClient) GetActor(id int) (domain.Actor, error) {
-	endpoint := fmt.Sprintf("%s/person/%d?api_key=%s", tmdbBaseURL, id, c.apiKey)
+	path := strings.ReplaceAll(c.cfg.Endpoints.GetPerson, "{id}", strconv.Itoa(id))
+	endpoint := c.cfg.BaseURL + path
 
 	var response tmdbPerson
 
@@ -118,7 +113,8 @@ func (c *TMDBHTTPClient) GetActor(id int) (domain.Actor, error) {
 
 // GetMovieCredits calls TMDB /person/{id}/movie_credits and returns the cast filmography.
 func (c *TMDBHTTPClient) GetMovieCredits(actorID int) ([]domain.Movie, error) {
-	endpoint := fmt.Sprintf("%s/person/%d/movie_credits?api_key=%s", tmdbBaseURL, actorID, c.apiKey)
+	path := strings.ReplaceAll(c.cfg.Endpoints.GetMovieCredits, "{id}", strconv.Itoa(actorID))
+	endpoint := c.cfg.BaseURL + path
 
 	var response tmdbMovieCreditsResponse
 
@@ -136,11 +132,7 @@ func (c *TMDBHTTPClient) GetMovieCredits(actorID int) ([]domain.Movie, error) {
 
 // SearchMovies calls TMDB /search/movie and returns matching movies.
 func (c *TMDBHTTPClient) SearchMovies(query string) ([]domain.Movie, error) {
-	endpoint := fmt.Sprintf("%s/search/movie?query=%s&api_key=%s",
-		tmdbBaseURL,
-		url.QueryEscape(query),
-		c.apiKey,
-	)
+	endpoint := c.cfg.BaseURL + c.cfg.Endpoints.SearchMovie + "?query=" + url.QueryEscape(query)
 
 	var response tmdbSearchMovieResponse
 
@@ -156,13 +148,23 @@ func (c *TMDBHTTPClient) SearchMovies(query string) ([]domain.Movie, error) {
 	return movies, nil
 }
 
-// get performs an HTTP GET, decodes the JSON body into dst, and returns any error.
-func (c *TMDBHTTPClient) get(url string, dst any) error {
-	resp, err := c.httpClient.Get(url)
+// get performs an HTTP GET with Bearer token auth, decodes the JSON body into dst, and returns any error.
+func (c *TMDBHTTPClient) get(endpoint string, dst any) error {
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("tmdb request build failed: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("tmdb request failed: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("%w: tmdb returned 404 for %s", ErrNotFound, endpoint)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("tmdb returned status %d", resp.StatusCode)

@@ -4,27 +4,29 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math/rand"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Br0bertinus/callsheet-api/internal/cache"
 	"github.com/Br0bertinus/callsheet-api/internal/client"
+	"github.com/Br0bertinus/callsheet-api/internal/config"
 	"github.com/Br0bertinus/callsheet-api/internal/domain"
 )
 
 // GameService handles all game logic: actor lookup, search, and step validation.
 type GameService struct {
-	tmdb  client.TMDBClient
-	cache cache.Cache
+	tmdb             client.TMDBClient
+	cache            cache.Cache
+	rolloverTimezone string
+	rolloverHour     int
 }
 
-// NewGameService creates a GameService with the provided TMDB client and cache.
-func NewGameService(tmdb client.TMDBClient, cache cache.Cache) *GameService {
+// NewGameService creates a GameService with the provided TMDB client, cache, and game config.
+func NewGameService(tmdb client.TMDBClient, cache cache.Cache, cfg config.GameConfig) *GameService {
 	return &GameService{
-		tmdb:  tmdb,
-		cache: cache,
+		tmdb:             tmdb,
+		cache:            cache,
+		rolloverTimezone: cfg.RolloverTimezone,
+		rolloverHour:     cfg.RolloverHour,
 	}
 }
 
@@ -72,54 +74,42 @@ func (s *GameService) NewGame(startActorID, targetActorID int) (domain.NewGameRe
 
 // gameDate returns the current "game day" string (YYYY-MM-DD).
 //
-// The daily challenge rolls over at 01:00 America/Los_Angeles (Pacific time,
-// DST-aware) rather than midnight UTC so that US users always see the new
-// puzzle after a reasonable overnight gap. Concretely: we shift the clock back
-// one hour before extracting the date, so anything before 01:00 Pacific is
-// still treated as the previous calendar day.
+// The daily challenge rolls over at the configured hour in the configured
+// timezone (default: 01:00 America/Los_Angeles) rather than midnight UTC so
+// that US users always see the new puzzle after a reasonable overnight gap.
+// Concretely: we shift the clock back by rolloverHour hours before extracting
+// the date, so anything before that hour is still treated as the previous
+// calendar day.
 //
-// If the America/Los_Angeles timezone cannot be loaded (e.g. tzdata is missing
-// from the runtime image) the function falls back to a fixed UTC-8 offset,
-// which is PST without DST adjustment.
-func gameDate() string {
-	loc, err := time.LoadLocation("America/Los_Angeles")
+// If the configured timezone cannot be loaded (e.g. tzdata is missing from the
+// runtime image) the function falls back to a fixed UTC-8 offset (PST without
+// DST adjustment).
+func (s *GameService) gameDate() string {
+	loc, err := time.LoadLocation(s.rolloverTimezone)
 	if err != nil {
 		// Fallback: fixed UTC-8 (PST, no DST)
 		loc = time.FixedZone("PST", -8*60*60)
 	}
 
-	// Subtract one hour so the rollover occurs at 01:00 Pacific, not midnight.
-	t := time.Now().In(loc).Add(-1 * time.Hour)
+	// Subtract rolloverHour hours so the rollover occurs at that hour, not midnight.
+	t := time.Now().In(loc).Add(-time.Duration(s.rolloverHour) * time.Hour)
 	return t.Format("2006-01-02")
 }
 
 // DailyChallenge returns the fixed start/target actor pair for the current game day.
 //
 // Override priority (highest to lowest):
-//  1. Env var DAILY_CHALLENGE_OVERRIDE=<startID>,<targetID>  — hot override, no redeploy needed.
-//  2. dailyOverrides map in daily_overrides.go              — planned editorial overrides.
-//  3. Seeded PRNG derived from the game-day date string     — default behaviour.
+//  1. dailyOverrides map in daily_overrides.go — planned editorial overrides.
+//  2. Seeded PRNG derived from the game-day date string — default behaviour.
 func (s *GameService) DailyChallenge() (domain.NewGameResponse, error) {
-	dateStr := gameDate()
+	dateStr := s.gameDate()
 
-	// 1. Runtime env var: DAILY_CHALLENGE_OVERRIDE=startID,targetID
-	if raw := os.Getenv("DAILY_CHALLENGE_OVERRIDE"); raw != "" {
-		parts := strings.SplitN(raw, ",", 2)
-		if len(parts) == 2 {
-			startID, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
-			targetID, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
-			if err1 == nil && err2 == nil && startID != targetID {
-				return s.NewGame(startID, targetID)
-			}
-		}
-	}
-
-	// 2. Code-level override map (daily_overrides.go).
+	// 1. Code-level override map (daily_overrides.go).
 	if pair, ok := dailyOverrides[dateStr]; ok {
 		return s.NewGame(pair[0], pair[1])
 	}
 
-	// 3. Default: deterministic PRNG seeded from the UTC date string.
+	// 2. Default: deterministic PRNG seeded from the UTC date string.
 	h := fnv.New64a()
 	h.Write([]byte(dateStr))
 	seed := int64(h.Sum64())
