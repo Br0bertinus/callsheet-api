@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
+	"github.com/Br0bertinus/callsheet-api/internal/client"
 	"github.com/Br0bertinus/callsheet-api/internal/domain"
 )
 
@@ -29,11 +31,15 @@ func (s *Server) NewGame(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.GameService.NewGame(req.StartActorID, req.TargetActorID)
 	if err != nil {
+		if errors.Is(err, client.ErrNotFound) {
+			s.writeError(w, http.StatusNotFound, "one or more actors not found")
+			return
+		}
 		s.writeError(w, http.StatusBadGateway, "failed to start game")
 		return
 	}
 
-	s.writeJSON(w, http.StatusCreated, result)
+	s.writeJSON(w, http.StatusOK, result)
 }
 
 // DailyChallenge handles GET /game/daily.
@@ -42,6 +48,10 @@ func (s *Server) NewGame(w http.ResponseWriter, r *http.Request) {
 func (s *Server) DailyChallenge(w http.ResponseWriter, r *http.Request) {
 	result, err := s.GameService.DailyChallenge()
 	if err != nil {
+		if errors.Is(err, client.ErrNotFound) {
+			s.writeError(w, http.StatusInternalServerError, "daily challenge actor not found — check daily_overrides.go")
+			return
+		}
 		s.writeError(w, http.StatusBadGateway, "failed to fetch daily challenge")
 		return
 	}
@@ -69,6 +79,10 @@ func (s *Server) ValidateStep(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.GameService.ValidateStep(req)
 	if err != nil {
+		if errors.Is(err, client.ErrNotFound) {
+			s.writeError(w, http.StatusNotFound, "one or more actors not found")
+			return
+		}
 		s.writeError(w, http.StatusBadGateway, "failed to validate step")
 		return
 	}

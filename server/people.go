@@ -1,9 +1,12 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/Br0bertinus/callsheet-api/internal/client"
 )
 
 // SearchPeople handles GET /search/people?q=<query>
@@ -34,6 +37,10 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request) {
 
 	actor, err := s.GameService.GetActor(id)
 	if err != nil {
+		if errors.Is(err, client.ErrNotFound) {
+			s.writeError(w, http.StatusNotFound, "person not found")
+			return
+		}
 		s.writeError(w, http.StatusBadGateway, "failed to fetch person")
 		return
 	}

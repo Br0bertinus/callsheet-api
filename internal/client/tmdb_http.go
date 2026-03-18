@@ -168,6 +168,10 @@ func (c *TMDBHTTPClient) get(endpoint string, dst any) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("%w: tmdb returned 404 for %s", ErrNotFound, endpoint)
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("tmdb returned status %d", resp.StatusCode)
 	}
