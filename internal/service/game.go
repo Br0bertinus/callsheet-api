@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math/rand"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Br0bertinus/callsheet-api/internal/cache"
@@ -96,30 +93,17 @@ func gameDate() string {
 // DailyChallenge returns the fixed start/target actor pair for the current game day.
 //
 // Override priority (highest to lowest):
-//  1. Env var DAILY_CHALLENGE_OVERRIDE=<startID>,<targetID>  — hot override, no redeploy needed.
-//  2. dailyOverrides map in daily_overrides.go              — planned editorial overrides.
-//  3. Seeded PRNG derived from the game-day date string     — default behaviour.
+//  1. dailyOverrides map in daily_overrides.go — planned editorial overrides.
+//  2. Seeded PRNG derived from the game-day date string — default behaviour.
 func (s *GameService) DailyChallenge() (domain.NewGameResponse, error) {
 	dateStr := gameDate()
 
-	// 1. Runtime env var: DAILY_CHALLENGE_OVERRIDE=startID,targetID
-	if raw := os.Getenv("DAILY_CHALLENGE_OVERRIDE"); raw != "" {
-		parts := strings.SplitN(raw, ",", 2)
-		if len(parts) == 2 {
-			startID, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
-			targetID, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
-			if err1 == nil && err2 == nil && startID != targetID {
-				return s.NewGame(startID, targetID)
-			}
-		}
-	}
-
-	// 2. Code-level override map (daily_overrides.go).
+	// 1. Code-level override map (daily_overrides.go).
 	if pair, ok := dailyOverrides[dateStr]; ok {
 		return s.NewGame(pair[0], pair[1])
 	}
 
-	// 3. Default: deterministic PRNG seeded from the UTC date string.
+	// 2. Default: deterministic PRNG seeded from the UTC date string.
 	h := fnv.New64a()
 	h.Write([]byte(dateStr))
 	seed := int64(h.Sum64())
